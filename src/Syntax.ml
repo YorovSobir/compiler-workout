@@ -41,7 +41,31 @@ module Expr =
        Takes a state and an expression, and returns the value of the expression in 
        the given state.
     *)
-    let eval _ = failwith "Not implemented yet"
+    let int_of_bool b = if b then 1 else 0
+    let bool_of_int num = if num <> 0 then true else false
+
+	let rec eval s e =
+		match e with
+		| Const num -> num
+		| Var x -> s x
+		| Binop (op, e1, e2) -> (
+		match op with
+			| "!!" -> int_of_bool ((bool_of_int (eval s e1)) || (bool_of_int (eval s e2)))
+			| "&&" -> int_of_bool ((bool_of_int (eval s e1)) && (bool_of_int (eval s e2)))
+			| "==" -> int_of_bool ((eval s e1) = (eval s e2))
+			| "!=" -> int_of_bool ((eval s e1) <> (eval s e2))
+			| "<=" -> int_of_bool ((eval s e1) <= (eval s e2))
+			| "<" -> int_of_bool ((eval s e1) < (eval s e2))
+			| ">=" -> int_of_bool ((eval s e1) >= (eval s e2))
+			| ">" -> int_of_bool ((eval s e1) > (eval s e2))
+			| "+" -> (eval s e1) + (eval s e2)
+			| "-" -> (eval s e1) - (eval s e2)
+			| "*" -> (eval s e1) * (eval s e2)
+			| "/" -> (eval s e1) / (eval s e2)
+			| "%" -> (eval s e1) mod (eval s e2)
+			| _ -> failwith @@ "unsupported op type " ^ op
+		 )
+	| _ -> failwith "unsupported expression"
 
   end
                     
