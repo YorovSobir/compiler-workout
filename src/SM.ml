@@ -23,45 +23,45 @@ type config = int list * Syntax.Stmt.config
    Takes a configuration and a program, and returns a configuration as a result
  *)
 
-let evalHelper conf prog confRes =
+let rec eval conf prog =
     match conf with
         (stack, stmtConf) -> (
             match prog with
-                | [] -> confRes
+                | [] -> conf
                 | ins :: insxs -> (
                     match ins with
                         | BINOP op -> (
                             match stack, stmtConf with
                                 | y :: x :: st, (exprSt, ixs, oxs) ->
-                                    ((Syntax.Expr.eval exprSt (Syntax.Expr.Binop (op, Syntax.Expr.Const x, Syntax.Expr.Const y))) :: st, stmtConf)
+                                    eval ((Syntax.Expr.eval exprSt (
+                                    Syntax.Expr.Binop (op, Syntax.Expr.Const x, Syntax.Expr.Const y))
+                                    ) :: st, stmtConf) insxs
                                 | _ -> failwith @@ "not enough args in stack"
                         )
-                        | CONST num -> (num :: stack, stmtConf)
+                        | CONST num -> eval (num :: stack, stmtConf) insxs
                         | READ -> (
                             match stmtConf with
-                                | (exprSt, z :: ixs, oxs) -> (z :: stack, (exprSt, ixs, oxs))
+                                | (exprSt, z :: ixs, oxs) -> eval (z :: stack, (exprSt, ixs, oxs)) insxs
                                 | _ -> failwith @@ "input int list are empty"
                         )
                         | WRITE -> (
                             match stack, stmtConf with
-                                | z :: st, (exprSt, ixs, oxs) -> (st, (exprSt, ixs, oxs@[z]))
+                                | z :: st, (exprSt, ixs, oxs) -> eval (st, (exprSt, ixs, oxs@[z])) insxs
                                 | _ -> failwith @@ "stack is empty"
                         )
                         | LD x -> (
                             match stmtConf with
-                                | (exprSt, ixs, oxs) -> ((exprSt x) :: stack, stmtConf)
+                                | (exprSt, ixs, oxs) -> eval ((exprSt x) :: stack, stmtConf) insxs
                         )
                         | ST x -> (
                             match stack, stmtConf with
-                                | z :: st, (exprSt, ixs, oxs) -> (st, (Syntax.Expr.update x z exprSt, ixs, oxs))
+                                | z :: st, (exprSt, ixs, oxs) ->
+                                    eval (st, (Syntax.Expr.update x z exprSt, ixs, oxs)) insxs
                                 | _ -> failwith @@ "stack is empty"
                         )
-                        | _ -> failwith @@ "temp"
                 )
 
         )
-
-let eval conf prog = evalHelper conf prog ([], conf)
 
 (* Top-level evaluation
 
@@ -78,5 +78,15 @@ let run i p = let (_, (_, _, o)) = eval ([], (Syntax.Expr.empty, i, [])) p in o
    Takes a program in the source language and returns an equivalent program for the
    stack machine
  *)
+let rec compileExpr exprT =
+    match exprT with
+        | Syntax.Expr.Const num -> [CONST num]
+        | Syntax.Expr.Var x -> [LD x]
+        | Syntax.Expr.Binop (op, exprT1, exprT2) -> (compileExpr exprT1) @ (compileExpr exprT2) @ [BINOP op]
 
-let compile _ = failwith "Not yet implemented"
+let rec compile stmt =
+    match stmt with
+        | Syntax.Stmt.Read x -> [READ; ST x]
+        | Syntax.Stmt.Write exprT -> (compileExpr exprT) @ [WRITE]
+        | Syntax.Stmt.Assign (x, exprT) -> (compileExpr exprT) @ [ST x]
+        | Syntax.Stmt.Seq (stmt1, stmt2) -> (compile stmt1) @ (compile stmt2)
