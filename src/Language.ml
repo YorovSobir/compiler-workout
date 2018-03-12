@@ -6,6 +6,8 @@ open GT
 (* Opening a library for combinator-based syntax analysis *)
 open Ostap.Combinators
 
+open Ostap
+
 (* Simple expressions: syntax and semantics *)
 module Expr =
   struct
@@ -78,7 +80,36 @@ module Expr =
 
     *)
     ostap (
-      parse: empty {failwith "Not implemented yet"}
+        parse: expr | const | var;
+        expr:
+        !(Util.expr
+            (fun x -> x)
+            [|
+                `Lefta, [ostap ("!!"), (fun x y -> Binop ("!!", x, y))];
+                `Lefta, [ostap ("&&"), (fun x y -> Binop ("&&", x, y))];
+                `Nona, [
+                            ostap ("<="), (fun x y -> Binop ("<=", x, y));
+                            ostap (">="), (fun x y -> Binop (">=", x, y));
+                            ostap ("=="), (fun x y -> Binop ("==", x, y));
+                            ostap ("!="), (fun x y -> Binop ("!=", x, y));
+                            ostap ("<"), (fun x y -> Binop ("<", x, y));
+                            ostap (">"), (fun x y -> Binop (">", x, y));
+                       ];
+                `Lefta, [
+                            ostap ("+"), (fun x y -> Binop ("+", x, y));
+                            ostap ("-"), (fun x y -> Binop ("-", x, y));
+                        ];
+                `Lefta, [
+                            ostap ("*"), (fun x y -> Binop ("*", x, y));
+                            ostap ("/"), (fun x y -> Binop ("/", x, y));
+                            ostap ("%"), (fun x y -> Binop ("%", x, y));
+                        ];
+            |]
+            primary
+        );
+        const: n:DECIMAL {Const n};
+        var: x:IDENT {Var x};
+        primary: const | var | -"(" expr -")"
     )
 
   end
@@ -103,7 +134,7 @@ module Stmt =
 
        Takes a configuration and a statement, and returns another configuration
     *)
-    
+
     let rec eval conf stmt =
         match stmt with
             | Read x -> (
@@ -123,7 +154,12 @@ module Stmt =
 
     (* Statement parser *)
     ostap (
-      parse: empty {failwith "Not implemented yet"}
+        parse: seq | other;
+        seq: s1:other -";" s2:seq {Seq (s1, s2)} | other;
+        other: read | write | assign;
+        read: -"read" -"(" x:IDENT -")" {Read x};
+        write: -"write" -"(" expr:!(Expr.parse) -")" {Write (expr)};
+        assign: x:IDENT -":=" expr:!(Expr.parse) {Assign (x, expr)}
     )
 
   end
