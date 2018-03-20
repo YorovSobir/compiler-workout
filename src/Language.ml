@@ -5,13 +5,13 @@ open GT
 
 (* Opening a library for combinator-based syntax analysis *)
 open Ostap.Combinators
-       
+open Ostap
 (* Simple expressions: syntax and semantics *)
 module Expr =
   struct
-    
-    (* The type for expressions. Note, in regular OCaml there is no "@type..." 
-       notation, it came from GT. 
+
+    (* The type for expressions. Note, in regular OCaml there is no "@type..."
+       notation, it came from GT.
     *)
     @type t =
     (* integer constant *) | Const of int
@@ -25,14 +25,14 @@ module Expr =
         +, -                 --- addition, subtraction
         *, /, %              --- multiplication, division, reminder
     *)
-                                                            
+
     (* State: a partial map from variables to integer values. *)
-    type state = string -> int 
+    type state = string -> int
 
     (* Empty state: maps every variable into nothing. *)
     let empty = fun x -> failwith (Printf.sprintf "Undefined variable %s" x)
 
-    (* Update: non-destructively "modifies" the state s by binding the variable x 
+    (* Update: non-destructively "modifies" the state s by binding the variable x
       to value v and returns the new state.
     *)
     let update x v s = fun y -> if x = y then v else s y
@@ -40,67 +40,77 @@ module Expr =
     (* Expression evaluator
 
           val eval : state -> t -> int
- 
-       Takes a state and an expression, and returns the value of the expression in 
+
+       Takes a state and an expression, and returns the value of the expression in
        the given state.
-     *)                                                       
-    let to_func op =
-      let bti   = function true -> 1 | _ -> 0 in
-      let itb b = b <> 0 in
-      let (|>) f g   = fun x y -> f (g x y) in
-      match op with
-      | "+"  -> (+)
-      | "-"  -> (-)
-      | "*"  -> ( * )
-      | "/"  -> (/)
-      | "%"  -> (mod)
-      | "<"  -> bti |> (< )
-      | "<=" -> bti |> (<=)
-      | ">"  -> bti |> (> )
-      | ">=" -> bti |> (>=)
-      | "==" -> bti |> (= )
-      | "!=" -> bti |> (<>)
-      | "&&" -> fun x y -> bti (itb x && itb y)
-      | "!!" -> fun x y -> bti (itb x || itb y)
-      | _    -> failwith (Printf.sprintf "Unknown binary operator %s" op)    
-    
-    let rec eval st expr =      
-      match expr with
-      | Const n -> n
-      | Var   x -> st x
-      | Binop (op, x, y) -> to_func op (eval st x) (eval st y)
+     *)
+    let int_of_bool b = if b then 1 else 0
+    let bool_of_int num = if num <> 0 then true else false
+
+    let rec eval s e =
+        match e with
+        | Const num -> num
+        | Var x -> s x
+        | Binop (op, e1, e2) -> (
+            match op with
+                | "!!" -> int_of_bool ((bool_of_int (eval s e1)) || (bool_of_int (eval s e2)))
+                | "&&" -> int_of_bool ((bool_of_int (eval s e1)) && (bool_of_int (eval s e2)))
+                | "==" -> int_of_bool ((eval s e1) = (eval s e2))
+                | "!=" -> int_of_bool ((eval s e1) <> (eval s e2))
+                | "<=" -> int_of_bool ((eval s e1) <= (eval s e2))
+                | "<" -> int_of_bool ((eval s e1) < (eval s e2))
+                | ">=" -> int_of_bool ((eval s e1) >= (eval s e2))
+                | ">" -> int_of_bool ((eval s e1) > (eval s e2))
+                | "+" -> (eval s e1) + (eval s e2)
+                | "-" -> (eval s e1) - (eval s e2)
+                | "*" -> (eval s e1) * (eval s e2)
+                | "/" -> (eval s e1) / (eval s e2)
+                | "%" -> (eval s e1) mod (eval s e2)
+                | _ -> failwith @@ "unsupported op type " ^ op
+         )
+         | _ -> failwith "unsupported expression"
 
     (* Expression parser. You can use the following terminals:
 
          IDENT   --- a non-empty identifier a-zA-Z[a-zA-Z0-9_]* as a string
          DECIMAL --- a decimal constant [0-9]+ as a string
-                                                                                                                  
+
     *)
-    ostap (                                      
-      parse:
-	  !(Ostap.Util.expr 
-             (fun x -> x)
-	     (Array.map (fun (a, s) -> a, 
-                           List.map  (fun s -> ostap(- $(s)), (fun x y -> Binop (s, x, y))) s
-                        ) 
-              [|                
-		`Lefta, ["!!"];
-		`Lefta, ["&&"];
-		`Nona , ["=="; "!="; "<="; "<"; ">="; ">"];
-		`Lefta, ["+" ; "-"];
-		`Lefta, ["*" ; "/"; "%"];
-              |] 
-	     )
-	     primary);
-      
-      primary:
-        n:DECIMAL {Const n}
-      | x:IDENT   {Var x}
-      | -"(" parse -")"
+    ostap (
+        parse: expr | const | var;
+        expr:
+        !(Util.expr
+            (fun x -> x)
+            [|
+                `Lefta, [ostap ("!!"), (fun x y -> Binop ("!!", x, y))];
+                `Lefta, [ostap ("&&"), (fun x y -> Binop ("&&", x, y))];
+                `Nona, [
+                            ostap ("<="), (fun x y -> Binop ("<=", x, y));
+                            ostap (">="), (fun x y -> Binop (">=", x, y));
+                            ostap ("=="), (fun x y -> Binop ("==", x, y));
+                            ostap ("!="), (fun x y -> Binop ("!=", x, y));
+                            ostap ("<"), (fun x y -> Binop ("<", x, y));
+                            ostap (">"), (fun x y -> Binop (">", x, y));
+                       ];
+                `Lefta, [
+                            ostap ("+"), (fun x y -> Binop ("+", x, y));
+                            ostap ("-"), (fun x y -> Binop ("-", x, y));
+                        ];
+                `Lefta, [
+                            ostap ("*"), (fun x y -> Binop ("*", x, y));
+                            ostap ("/"), (fun x y -> Binop ("/", x, y));
+                            ostap ("%"), (fun x y -> Binop ("%", x, y));
+                        ];
+            |]
+            primary
+        );
+        const: n:DECIMAL {Const n};
+        var: x:IDENT {Var x};
+        primary: const | var | -"(" expr -")"
     )
-    
+
   end
-                    
+
 (* Simple statements: syntax and sematics *)
 module Stmt =
   struct
@@ -113,7 +123,7 @@ module Stmt =
     (* composition                      *) | Seq    of t * t with show
 
     (* The type of configuration: a state, an input stream, an output stream *)
-    type config = Expr.state * int list * int list 
+    type config = Expr.state * int list * int list
 
     (* Statement evaluator
 
@@ -121,30 +131,40 @@ module Stmt =
 
        Takes a configuration and a statement, and returns another configuration
     *)
-    let rec eval ((st, i, o) as conf) stmt =
-      match stmt with
-      | Read    x       -> (match i with z::i' -> (Expr.update x z st, i', o) | _ -> failwith "Unexpected end of input")
-      | Write   e       -> (st, i, o @ [Expr.eval st e])
-      | Assign (x, e)   -> (Expr.update x (Expr.eval st e) st, i, o)
-      | Seq    (s1, s2) -> eval (eval conf s1) s2
-                                
+    let rec eval conf stmt =
+        match stmt with
+            | Read x -> (
+                match conf with
+                    | (_, [], _) -> failwith @@ "empty int list"
+                    | (exprSt, z :: ixs, oxs) -> (Expr.update x z exprSt, ixs, oxs)
+            )
+            | Write exprT -> (
+                match conf with
+                    | (exprSt, ixs, oxs) -> (exprSt, ixs, oxs@[(Expr.eval exprSt exprT)])
+            )
+            | Assign (x, exprT) -> (
+                match conf with
+                    | (exprSt, ixs, oxs) -> (Expr.update x (Expr.eval exprSt exprT) exprSt, ixs, oxs)
+            )
+            | Seq (stmt1, stmt2) -> eval (eval conf stmt1) stmt2
+
+
     (* Statement parser *)
     ostap (
-      parse:
-        s:stmt ";" ss:parse {Seq (s, ss)}
-      | stmt;
-      stmt:
-        "read" "(" x:IDENT ")"          {Read x}
-      | "write" "(" e:!(Expr.parse) ")" {Write e}
-      | x:IDENT ":=" e:!(Expr.parse)    {Assign (x, e)}            
+        parse: seq | other;
+        seq: s1:other -";" s2:seq {Seq (s1, s2)} | other;
+        other: read | write | assign;
+        read: -"read" -"(" x:IDENT -")" {Read x};
+        write: -"write" -"(" expr:!(Expr.parse) -")" {Write (expr)};
+        assign: x:IDENT -":=" expr:!(Expr.parse) {Assign (x, expr)}
     )
-      
+
   end
 
 (* The top-level definitions *)
 
 (* The top-level syntax category is statement *)
-type t = Stmt.t    
+type t = Stmt.t
 
 (* Top-level evaluator
 
@@ -156,4 +176,4 @@ let eval p i =
   let _, _, o = Stmt.eval (Expr.empty, i, []) p in o
 
 (* Top-level parser *)
-let parse = Stmt.parse                                                     
+let parse = Stmt.parse
