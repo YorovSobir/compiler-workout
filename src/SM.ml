@@ -61,7 +61,6 @@ type config = int list * Stmt.config
                                  | _ -> failwith @@ "stack is empty"
                          )
                  )
-
  )
 (* Top-level evaluation
 
