@@ -8,18 +8,12 @@ open Language
 (* read to stack                   *) | READ
 (* write from stack                *) | WRITE
 (* load a variable to the stack    *) | LD    of string
-<<<<<<< HEAD
 (* store a variable from the stack *) | ST    of string
 (* a label                         *) | LABEL of string
-(* unconditional jump              *) | JMP   of string                                                                                                                
+(* unconditional jump              *) | JMP   of string
 (* conditional jump                *) | CJMP  of string * string with show
-                                                   
-(* The type for the stack machine program *)                                                               
-=======
-(* store a variable from the stack *) | ST    of string with show
 
 (* The type for the stack machine program *)
->>>>>>> hw4
 type prg = insn list
 
 (* The type for the stack machine configuration: a stack and a configuration from statement
@@ -31,15 +25,11 @@ type config = int list * Stmt.config
 
      val eval : env -> config -> prg -> config
 
-<<<<<<< HEAD
    Takes an environment, a configuration and a program, and returns a configuration as a result. The
    environment is used to locate a label to jump to (via method env#labeled <label_name>)
-*)                         
+*)
 let rec eval env conf prog = failwith "Not yet implemented"
-=======
-   Takes a configuration and a program, and returns a configuration as a result
- *)
- let rec eval conf prog =
+let rec eval conf prog =
      match conf with
          (stack, stmtConf) -> (
              match prog with
@@ -76,7 +66,6 @@ let rec eval env conf prog = failwith "Not yet implemented"
                                  | _ -> failwith @@ "stack is empty"
                          )
                  )
->>>>>>> hw4
 
  )
 (* Top-level evaluation
@@ -102,9 +91,6 @@ let run p i =
    Takes a program in the source language and returns an equivalent program for the
    stack machine
 *)
-<<<<<<< HEAD
-let compile p = failwith "Not yet implemented"
-=======
 let rec compileExpr exprT =
    match exprT with
        | Language.Expr.Const num -> [CONST num]
@@ -116,5 +102,4 @@ let rec compile stmt =
        | Language.Stmt.Read x -> [READ; ST x]
        | Language.Stmt.Write exprT -> (compileExpr exprT) @ [WRITE]
        | Language.Stmt.Assign (x, exprT) -> (compileExpr exprT) @ [ST x]
-| Language.Stmt.Seq (stmt1, stmt2) -> (compile stmt1) @ (compile stmt2)
->>>>>>> hw4
+       | Language.Stmt.Seq (stmt1, stmt2) -> (compile stmt1) @ (compile stmt2)
