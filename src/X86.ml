@@ -97,7 +97,7 @@ let set_flags op =
         | ">" -> "G"
         | _ -> failwith @@ "wrong op " ^ op
 
-let is_zero x res = [Binop ("^", eax, eax); Mov (x, ebx); Binop ("cmp", L 0, ebx);
+let is_zero x res = [Binop ("^", eax, eax); Mov (x, edx); Binop ("cmp", L 0, edx);
                      Set (set_flags "!=", "%al"); Mov (eax, res)]
 
 let rec compile env = function
@@ -109,37 +109,26 @@ let rec compile env = function
             let env = env#global var in
             let x, env = env#allocate in
                 match x with
-                | S _ -> (
-                    let t_ebx, env = env#allocate in
-                    let _, env = env#pop
-                    in
-                        env, [Mov (ebx, t_ebx); Mov (M (env#loc var), ebx);
-                              Mov (ebx, x); Mov (t_ebx, ebx)]
-                )
+                | S _ -> env, [Mov (M (env#loc var), eax); Mov (eax, x)]
                 | _ -> env, [Mov (M (env#loc var), x)]
         )
         | ST var -> (
             let env = env#global var in
-            let t_ebx, env = env#allocate in
-            let _, x, env = env#pop2 in
+            let x, env = env#pop in
                 match x with
-                | S _ | M _ -> env, [Mov (ebx, t_ebx); Mov (x, ebx);
-                                    Mov (ebx, M (env#loc var)); Mov (t_ebx, ebx)]
+                | S _ | M _ -> env, [Mov (x, eax); Mov (eax, M (env#loc var))]
                 | _ -> env, [Mov (x, M (env#loc var))]
         )
         | BINOP op -> (
             let res, env = env#allocate in
-            let t_eax, env = env#allocate in
             let t_ebx, env = env#allocate in
             let _, _, env = env#pop2 in
-            let _, env = env#pop in
             let x, y, env = env#pop2 in
                 match op with
                 | "+" | "-" | "*" ->
-                    env#push res, [Mov (eax, t_eax); Mov (y, eax);
-                                  Binop (op, x, eax); Mov (eax, res); Mov (t_eax, eax)]
+                    env#push res, [Mov (y, eax); Binop (op, x, eax); Mov (eax, res)]
                 | "/" | "%" -> (
-                    let env, asm = env#push res, [Mov (eax, t_eax); Mov (y, eax); Cltd] in
+                    let env, asm = env#push res, [Mov (y, eax); Cltd] in
                     let env, asm' =
                         match x with
                         | S _ | L _ -> env, [Mov (ebx, t_ebx); Mov (x, ebx); IDiv ebx; Mov (t_ebx, ebx)]
@@ -148,13 +137,10 @@ let rec compile env = function
                             env, asm @ asm' @ [Mov (quot_or_rem op, res)]
                 )
                 | "==" | "!=" | "<=" | "<" | ">=" | ">" ->  env#push res,
-                    [Mov (eax, t_eax); Binop ("^", eax, eax); Mov (ebx, t_ebx);
-                     Mov (y, ebx); Binop ("cmp", x, ebx); Set (set_flags op, "%al"); Mov (eax, res);
-                     Mov (t_ebx, ebx); Mov (t_eax, eax)]
+                    [Binop ("^", eax, eax); Mov (y, edx); Binop ("cmp", x, edx); Set (set_flags op, "%al"); Mov (eax, res)]
                 | "&&" | "!!" -> env#push res,
-                                [Mov (eax, t_eax); Mov (ebx, t_ebx)] @ (is_zero y res) @
-                                (is_zero x ebx) @ [Binop ("^", eax, eax); Binop (op, res, ebx);
-                                Set (set_flags "!=", "%al"); Mov (eax, res); Mov (t_ebx, ebx); Mov (t_eax, eax)]
+                                (is_zero y res) @ (is_zero x edx) @ [Binop ("^", eax, eax); Binop (op, res, edx);
+                                Set (set_flags "!=", "%al"); Mov (eax, res)]
         )
         | WRITE ->
             let x, env = env#pop in
