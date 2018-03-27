@@ -124,7 +124,7 @@ module Stmt =
     (* empty statement                  *) | Skip
     (* conditional                      *) | If     of Expr.t * t * t
     (* loop with a pre-condition        *) | While  of Expr.t * t
-    (* loop with a post-condition       *) (* add yourself *)  with show
+    (* loop with a post-condition       *) | Repeat of t * Expr.t  with show
 
     (* The type of configuration: a state, an input stream, an output stream *)
     type config = Expr.state * int list * int list
@@ -151,16 +151,46 @@ module Stmt =
                     | (exprSt, ixs, oxs) -> (Expr.update x (Expr.eval exprSt exprT) exprSt, ixs, oxs)
             )
             | Seq (stmt1, stmt2) -> eval (eval conf stmt1) stmt2
+            | Skip -> conf
+            | If (exprT, stmt1, stmt2) -> (
+                let (exprSt, ixs, oxs) = conf in
+                    match (Expr.eval exprSt exprT) with
+                    | 0 -> eval conf stmt2
+                    | _ -> eval conf stmt1
+            )
+            | While (exprT, stmt) as loop -> (
+                let (exprSt, ixs, oxs) = conf in
+                    match (Expr.eval exprSt exprT) with
+                    | 0 -> conf
+                    | _ -> eval (eval conf stmt) loop
+            )
+            | Repeat (stmt, exprT) as loop -> (
+                let confRes = eval conf stmt in
+                let (exprSt, ixs, oxs) = confRes in
+                    match (Expr.eval exprSt exprT) with
+                    | 0 -> eval confRes loop
+                    | _ -> confRes
+            )
 
 
     (* Statement parser *)
     ostap (
         parse: seq | other;
         seq: s1:other -";" s2:seq {Seq (s1, s2)} | other;
-        other: read | write | assign;
-        read: -"read" -"(" x:IDENT -")" {Read x};
-        write: -"write" -"(" expr:!(Expr.parse) -")" {Write (expr)};
-        assign: x:IDENT -":=" expr:!(Expr.parse) {Assign (x, expr)}
+        other: read | write | assign | if_ | while_ | for_ | repeat_ | skip;
+        read: %"read" -"(" x:IDENT -")" {Read x};
+        write: %"write" -"(" expr:!(Expr.parse) -")" {Write (expr)};
+        assign: x:IDENT -":=" expr:!(Expr.parse) {Assign (x, expr)};
+        if_: %"if" expr:!(Expr.parse) %"then" stmt:parse %"fi" {If (expr, stmt, Skip)} |
+             %"if" expr:!(Expr.parse) %"then" stmt1:parse else_elif:else_or_elif %"fi" {If (expr, stmt1, else_elif)};
+        else_or_elif: else_ | elif_;
+        else_: %"else" stmt:parse {stmt};
+        elif_: %"elif" expr:!(Expr.parse) %"then" stmt:parse rep:else_or_elif {If (expr, stmt, rep)};
+        while_: %"while" expr:!(Expr.parse) %"do" stmt:parse %"od" {While (expr, stmt)};
+        for_: %"for" init:parse "," expr:!(Expr.parse) "," next:parse %"do" stmt:parse %"od"
+                {Seq (init, While (expr, Seq(stmt, next)))};
+        repeat_: %"repeat" stmt:parse %"until" expr:!(Expr.parse) {Repeat (stmt, expr)};
+        skip: %"skip" {Skip}
     )
 
   end
