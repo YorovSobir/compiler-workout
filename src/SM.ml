@@ -36,33 +36,19 @@ let rec eval env conf prog =
         | [] -> conf
         | ins :: insxs -> (
             match ins with
-            | BINOP op -> (
-                match stack, stmtConf with
-                | y :: x :: st, (exprSt, ixs, oxs) ->
-                     eval env ((Language.Expr.eval exprSt (Binop (op, Const x, Const y))) :: st, stmtConf) insxs
-                | _ -> failwith @@ "not enough args in stack"
-            )
+            | BINOP op -> let y :: x :: st, (exprSt, ixs, oxs) = stack, stmtConf
+                          in eval env ((binop op x y) :: st, stmtConf) insxs
             | CONST num -> eval env (num :: stack, stmtConf) insxs
-            | READ -> (
-                match stmtConf with
-                | (exprSt, z :: ixs, oxs) -> eval env (z :: stack, (exprSt, ixs, oxs)) insxs
-                | _ -> failwith @@ "input int list are empty"
-            )
-            | WRITE -> (
-                match stack, stmtConf with
-                | z :: st, (exprSt, ixs, oxs) -> eval env (st, (exprSt, ixs, oxs@[z])) insxs
-                | _ -> failwith @@ "stack is empty"
-            )
+            | READ -> let (exprSt, z :: ixs, oxs) = stmtConf
+                      in eval env (z :: stack, (exprSt, ixs, oxs)) insxs
+            | WRITE -> let z :: st, (exprSt, ixs, oxs) = stack, stmtConf
+                       in eval env (st, (exprSt, ixs, oxs@[z])) insxs
             | LD x -> (
                 let (exprSt, ixs, oxs) = stmtConf in
                     eval env ((exprSt x) :: stack, stmtConf) insxs
             )
-            | ST x -> (
-                match stack, stmtConf with
-                | z :: st, (exprSt, ixs, oxs) ->
-                     eval env (st, (update x z exprSt, ixs, oxs)) insxs
-                | _ -> failwith @@ "stack is empty"
-            )
+            | ST x -> let z :: st, (exprSt, ixs, oxs) = stack, stmtConf
+                      in eval env (st, (update x z exprSt, ixs, oxs)) insxs
             | LABEL l -> eval env conf insxs
             | JMP l -> eval env conf (env#labeled l)
             | CJMP (cond, l) -> (

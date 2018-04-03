@@ -46,29 +46,27 @@ module Expr =
      *)
     let int_of_bool b = if b then 1 else 0
     let bool_of_int num = if num <> 0 then true else false
+    let binop op x y = match op with
+        | "!!" -> int_of_bool @@ ( || ) (bool_of_int x) (bool_of_int y)
+        | "&&" -> int_of_bool @@ ( && ) (bool_of_int x) (bool_of_int y)
+        | "==" -> int_of_bool @@ ( = ) x y
+        | "!=" -> int_of_bool @@ ( <> ) x y
+        | "<=" -> int_of_bool @@ ( <= ) x y
+        | "<" -> int_of_bool @@ ( < ) x y
+        | ">=" -> int_of_bool @@ ( >= ) x y
+        | ">" -> int_of_bool @@ ( > ) x y
+        | "+" -> ( + ) x y
+        | "-" -> ( - ) x y
+        | "*" -> ( * ) x y
+        | "/" -> ( / ) x y
+        | "%" -> ( mod ) x y
+        | _ -> failwith @@ "unsupported op type " ^ op
 
     let rec eval s e =
         match e with
         | Const num -> num
         | Var x -> s x
-        | Binop (op, e1, e2) -> (
-            match op with
-                | "!!" -> int_of_bool ((bool_of_int (eval s e1)) || (bool_of_int (eval s e2)))
-                | "&&" -> int_of_bool ((bool_of_int (eval s e1)) && (bool_of_int (eval s e2)))
-                | "==" -> int_of_bool ((eval s e1) = (eval s e2))
-                | "!=" -> int_of_bool ((eval s e1) <> (eval s e2))
-                | "<=" -> int_of_bool ((eval s e1) <= (eval s e2))
-                | "<" -> int_of_bool ((eval s e1) < (eval s e2))
-                | ">=" -> int_of_bool ((eval s e1) >= (eval s e2))
-                | ">" -> int_of_bool ((eval s e1) > (eval s e2))
-                | "+" -> (eval s e1) + (eval s e2)
-                | "-" -> (eval s e1) - (eval s e2)
-                | "*" -> (eval s e1) * (eval s e2)
-                | "/" -> (eval s e1) / (eval s e2)
-                | "%" -> (eval s e1) mod (eval s e2)
-                | _ -> failwith @@ "unsupported op type " ^ op
-         )
-         | _ -> failwith "unsupported expression"
+        | Binop (op, e1, e2) -> binop op (eval s e1) (eval s e2)
 
     (* Expression parser. You can use the following terminals:
 
@@ -137,19 +135,12 @@ module Stmt =
     *)
     let rec eval conf stmt =
         match stmt with
-            | Read x -> (
-                match conf with
-                    | (_, [], _) -> failwith @@ "empty int list"
-                    | (exprSt, z :: ixs, oxs) -> (Expr.update x z exprSt, ixs, oxs)
-            )
-            | Write exprT -> (
-                match conf with
-                    | (exprSt, ixs, oxs) -> (exprSt, ixs, oxs@[(Expr.eval exprSt exprT)])
-            )
-            | Assign (x, exprT) -> (
-                match conf with
-                    | (exprSt, ixs, oxs) -> (Expr.update x (Expr.eval exprSt exprT) exprSt, ixs, oxs)
-            )
+            | Read x -> let (exprSt, z :: ixs, oxs) = conf
+                        in (Expr.update x z exprSt, ixs, oxs)
+            | Write exprT -> let (exprSt, ixs, oxs) = conf
+                             in (exprSt, ixs, oxs@[(Expr.eval exprSt exprT)])
+            | Assign (x, exprT) -> let (exprSt, ixs, oxs) = conf
+                                   in (Expr.update x (Expr.eval exprSt exprT) exprSt, ixs, oxs)
             | Seq (stmt1, stmt2) -> eval (eval conf stmt1) stmt2
             | Skip -> conf
             | If (exprT, stmt1, stmt2) -> (
