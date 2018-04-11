@@ -15,9 +15,10 @@ module State =
     type t = {g : string -> int; l : string -> int; scope : string list}
 
     (* Empty state *)
-    let emptyInsideScope = fun x -> failwith (Printf.sprintf "Undefined variable %s" x)
+    let emptyGlobalScope = fun x -> failwith (Printf.sprintf "Undefined variable %s in global" x)
+    let emptyLocalScope = fun x -> failwith (Printf.sprintf "Undefined variable %s in locals" x)
 
-    let empty = {g = emptyInsideScope; l = emptyInsideScope; scope = []}
+    let empty = {g = emptyGlobalScope; l = emptyLocalScope; scope = []}
 
     (* Update: non-destructively "modifies" the state s by binding the variable x
        to value v and returns the new state w.r.t. a scope
@@ -31,19 +32,20 @@ module State =
         | _ -> {g = updateInsideScope x v g_; l = l_; scope = scope_}
 
     (* Evals a variable in a state w.r.t. a scope *)
-    let eval s x = let {g; l; scope} = s
+    let eval s x = let {g = g_; l = l_; scope = scope_} = s
     in
-        match (List.mem x scope) with
-        | true -> l x
-        | false -> g x
+        match (List.mem x scope_) with
+        | true -> l_ x
+        | false -> g_ x
 
     (* Creates a new scope, based on a given state *)
     let enter st xs = let {g = g_; l = _; scope = _} = st
-    in {g = g_; l = emptyInsideScope; scope = xs}
+    in {g = g_; l = emptyLocalScope; scope = xs}
 
     (* Drops a scope *)
-    let leave st st' = let {g = _; l = l_; scope = scope_} = st in
-        let {g = g_; l = _; scope = _ } = st' in {g = g_; l = l_; scope = scope_}
+    let leave curState prevState = let {g = g_; l = _; scope = _ } = curState in
+        let {g = _; l = l_; scope = scope_} = prevState in
+        {g = g_; l = l_; scope = scope_}
 
   end
 
@@ -139,7 +141,6 @@ module Expr =
 
   end
 
-let updateList st xs vs = List.fold_left2 (fun st' x v -> State.update x (Expr.eval st' v) st') st
 
 (* Simple statements: syntax and sematics *)
 module Stmt =
@@ -171,7 +172,6 @@ module Stmt =
 
        which returns a list of formal parameters, local variables, and a body for given definition
     *)
-    open State
     let rec eval env ((st, i, o) as conf) stmt =
     match stmt with
         | Write exprT -> (st, i, o @ [(Expr.eval st exprT)])
@@ -197,13 +197,12 @@ module Stmt =
                 | 0 -> eval env confRes loop
                 | _ -> confRes
         )
-        | Call (func, exprxs) -> (
-            let (actualParam, localParam, funcBody) = env#definition func in
-            let innerState = State.enter st (actualParam @ localParam) in
-            let updateList = List.fold_left2 (fun st' x v -> State.update x (Expr.eval st' v) st') in
-            let st' = updateList innerState actualParam exprxs in
-            let (st'', i', o') = eval env (st', i, o) funcBody in
-            (State.leave st st'', i', o')
+        | Call (funcName, exprxs) -> (
+            let (args, locals, body) = env#definition funcName in
+            let updateStateWithList = List.fold_left2 (fun state x v -> State.update x (Expr.eval st v) state) in
+            let funcState = updateStateWithList (State.enter st (args @ locals)) args exprxs in
+            let (funcState', i', o') = eval env (funcState, i, o) body in
+            (State.leave funcState' st, i', o')
         )
 
     (* Statement parser *)
@@ -211,7 +210,7 @@ module Stmt =
         parse: seq | other;
         seq: s1:other -";" s2:seq {Seq (s1, s2)} | other;
         other: func | read | write | assign | if_ | while_ | for_ | repeat_ | skip;
-        func: name_:IDENT %"(" ps:!(Util.list0By)[ostap (",")][ostap (!(Expr.parse))] %")" {Call (name_, ps)};
+        func: name_:IDENT "(" ps:!(Util.list0By)[ostap (",")][ostap (!(Expr.parse))] ")" {Call (name_, ps)};
         read: %"read" -"(" x:IDENT -")" {Read x};
         write: %"write" -"(" expr:!(Expr.parse) -")" {Write (expr)};
         assign: x:IDENT -":=" expr:!(Expr.parse) {Assign (x, expr)};
@@ -237,10 +236,10 @@ module Definition =
     type t = string * (string list * string list * Stmt.t)
     ostap (
       parse: func;
-      func: %"fun" name_:IDENT %"(" ps:parameters %")" ls:funcLocals body:funcBody {(name_, (ps, ls, body))};
+      func: %"fun" name_:IDENT "(" ps:parameters ")" ls:funcLocals body:funcBody {(name_, (ps, ls, body))};
       parameters: ps:!(Util.list0By)[ostap (",")][ostap (IDENT)] {ps};
-      funcLocals: %"local" ls:!(Util.list0By)[ostap (",")][ostap (IDENT)] {ls};
-      funcBody: %"{" stmt:!(Stmt.parse) %"}" {stmt}
+      funcLocals: %"local" ls:!(Util.list0By)[ostap (",")][ostap (IDENT)] {ls} | empty {[]};
+      funcBody: "{" stmt:!(Stmt.parse) "}" {stmt}
     )
   end
 

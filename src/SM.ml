@@ -35,51 +35,49 @@ open Language.Expr
 open Language
 let rec eval env ((cstack, stack, ((st, i, o) as stmtConf)) as conf) prog =
     match prog with
-        | [] -> conf
-        | ins :: insxs -> (
-            match ins with
-            | BINOP op -> let y :: x :: stack' = stack
-                          in eval env (cstack, (binop op x y) :: stack', stmtConf) insxs
-            | CONST num -> eval env (cstack, num :: stack, stmtConf) insxs
-            | READ -> let z :: ixs = i
-                      in eval env (cstack, z :: stack, (st, ixs, o)) insxs
-            | WRITE -> let z :: stack' = stack
-                       in eval env (cstack, stack', (st, i, o@[z])) insxs
-            | LD x -> eval env (cstack, (State.eval st x) :: stack, stmtConf) insxs
-            | ST x -> let z :: stack' = stack
-                      in eval env (cstack, stack', (State.update x z st, i, o)) insxs
-            | LABEL l -> eval env conf insxs
-            | JMP l -> eval env conf (env#labeled l)
-            | CJMP (cond, l) -> (
-                let z :: stack' = stack in
-                match cond with
-                | "z" when z == 0 -> eval env conf (env#labeled l)
-                | "z" when z != 0 -> eval env conf insxs
-                | "nz" when z == 0 -> eval env conf insxs
-                | "nz" when z != 0 -> eval env conf (env#labeled l)
-                | _ -> failwith @@ "unsupported condition " ^ cond
-            )
-            | BEGIN (params, locals) -> (
-                let rec values params stack = fun res -> match params, stack with
-                | [], stack' -> res, stack'
-                | a :: params', v :: stack' -> values params' stack' ([v] @ res)
-                | _, _ -> failwith @@ "not equal length" in
-                let vals, stack' = values params stack [] in
-                let state = State.enter st (params @ locals) in
-                let updateList = List.fold_left2 (fun st' x v -> State.update x v st') in
-                let state' = updateList state params vals in
-                eval env (cstack, stack', (state', i, o)) insxs
-            )
-            | END -> (
-                let (p', st') :: cstack' = cstack in
-                eval env (cstack', stack, (State.leave st st', i, o)) p'
-            )
-            | CALL funcName -> (
-                let cstack' = [(insxs, st)] @ cstack in
-                eval env (cstack', stack, stmtConf) (env#labeled funcName)
-            )
-            | _ -> failwith @@ "not yet implemented"
-         )
+    | [] -> conf
+    | ins :: insxs -> (
+        match ins with
+        | BINOP op -> let y :: x :: stack' = stack
+                      in eval env (cstack, (binop op x y) :: stack', stmtConf) insxs
+        | CONST num -> eval env (cstack, num :: stack, stmtConf) insxs
+        | READ -> let z :: ixs = i
+                  in eval env (cstack, z :: stack, (st, ixs, o)) insxs
+        | WRITE -> let z :: stack' = stack
+                   in eval env (cstack, stack', (st, i, o@[z])) insxs
+        | LD x -> eval env (cstack, (State.eval st x) :: stack, stmtConf) insxs
+        | ST x -> let z :: stack' = stack
+                  in eval env (cstack, stack', (State.update x z st, i, o)) insxs
+        | LABEL l -> eval env conf insxs
+        | JMP l -> eval env conf (env#labeled l)
+        | CJMP (cond, l) -> (
+            let z :: stack' = stack in
+            match cond with
+            | "z" when z == 0 -> eval env conf (env#labeled l)
+            | "z" when z != 0 -> eval env conf insxs
+            | "nz" when z == 0 -> eval env conf insxs
+            | "nz" when z != 0 -> eval env conf (env#labeled l)
+            | _ -> failwith @@ "unsupported condition " ^ cond
+        )
+        | BEGIN (args, locals) -> (
+            let rec values args stack = function res -> match args, stack with
+            | [], stack' -> res, stack'
+            | a :: args', v :: stack' -> values args' stack' (res @ [v])
+            | _, _ -> failwith @@ "not equal length" in
+            let stackVals, stack' = values args stack [] in
+            let funcState = State.enter st (args @ locals) in
+            let updateStateWithList = List.fold_left2 (fun st' x v -> State.update x v st') in
+            let funcState' = updateStateWithList funcState args stackVals in
+            eval env (cstack, stack', (funcState', i, o)) insxs
+        )
+        | END -> (
+            match cstack with
+            | (p', st_old) :: cstack' -> eval env (cstack', stack, (State.leave st st_old, i, o)) p'
+            | _ -> conf
+        )
+        | CALL funcName -> eval env ((insxs, st) :: cstack, stack, stmtConf) (env#labeled funcName)
+        | _ -> failwith @@ "not yet implemented"
+     )
 (* Top-level evaluation
 
      val run : prg -> int list -> int list
@@ -146,17 +144,17 @@ let compile (defs, p) =
                 [CJMP ("z", loopLabel)], n
         )
         | Skip -> [], n
-        (*| Call (funcName, exprxs) -> (List.flatten (List.map compileExpr exprxs)) @ [JMP funcName], n*)
-        | _ -> failwith @@ "not supported"
+        | Call (funcName, exprxs) -> (List.flatten (List.map compileExpr exprxs)) @ [CALL funcName], n
+        | _ -> failwith @@ "not yet implemented"
     in
-        let compileDefs defs =
-            let mapper (p, n) (funcName, (params, locals, bodyStmt)) =
-                let stmtPrg, n = compileStmt bodyStmt n in
-                p @ [LABEL funcName; BEGIN (params, locals)] @ stmtPrg @ [END], n
-            in
-            let p', n = List.fold_left mapper ([], 1) defs in
-            p', n
+    let compileDefs defs =
+        let mapper (p, n) (funcName, (params, locals, bodyStmt)) =
+            let stmtPrg, n = compileStmt bodyStmt n in
+            p @ [LABEL funcName; BEGIN (params, locals)] @ stmtPrg @ [END], n
+        in
+        let p', n = List.fold_left mapper ([], 1) defs in
+        p', n
     in
-        let defsProgram, n = compileDefs defs in
-        let mainProgram, _ = compileStmt p, n in
-        defsProgram @ mainProgram
+    let defsProgram, n = compileDefs defs in
+    let mainProgram, _ = compileStmt p n in
+    mainProgram @ [END] @ defsProgram
