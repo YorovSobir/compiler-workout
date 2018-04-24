@@ -74,9 +74,9 @@
 \newcommand{\graybox}[1]{\colorbox{light-gray}{#1}}
 
 \lstdefinelanguage{ocaml}{
-keywords={let, begin, end, in, match, type, and, fun, 
+keywords={let, begin, end, in, match, type, and, fun,
 function, try, with, class, object, method, of, rec, repeat, until,
-while, not, do, done, as, val, inherit, module, sig, @type, struct, 
+while, not, do, done, as, val, inherit, module, sig, @type, struct,
 if, then, else, open, virtual, new, fresh, skip, od, fi, elif, for, local, return, read, write},
 sensitive=true,
 %basicstyle=\small,
@@ -120,7 +120,7 @@ language=ocaml
 
 \section{Functions in Expressions}
 
-At the syntax level function calls are introduced with the following construct: 
+At the syntax level function calls are introduced with the following construct:
 
 \[
 \begin{array}{rcl}
@@ -277,7 +277,7 @@ The rules themselves are shown on Fig.~\ref{bs_cps}. Note, the rule for the call
           {\withenv{K,\,\Phi}{\trans{c_0=\inbr{\sigma_0,\,\_,\,\_,\,\_}}{f (\overline{e_k})}{\inbr{\mbox{\textbf{leave}}\;\sigma^\prime\;\sigma_0, i^\prime, o^\prime, n}}}}
           \ruleno{Call}
   \]
-  
+
   \[
     \withenv{K,\,\Phi}{\trans{c}{\llang{return}}{c}}
     \ruleno{ReturnEmpty}
@@ -287,8 +287,8 @@ The rules themselves are shown on Fig.~\ref{bs_cps}. Note, the rule for the call
     \trule{{\setsubarrow{_{\mathscr E}} \withenv{\Phi}{\trans{c}{e}{c^\prime}}}}
           {\withenv{K,\,\Phi}{\trans{c}{\llang{return $\;e\;$}}{c^\prime}}}
     \ruleno{Return}
-  \]  
-  
+  \]
+
   \caption{Continuation-passing Style Semantics for Statements}
   \label{bs_cps}
 \end{figure}
