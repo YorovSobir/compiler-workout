@@ -60,7 +60,7 @@ let rec eval env ((cstack, stack, ((st, i, o) as c)) as conf) prg = match prg wi
         | "nz" when z != 0 -> eval env (cstack, stack', c) (env#labeled l)
         | _ -> failwith @@ "unsupported condition " ^ cond
     )
-    | BEGIN (args, locals) -> (
+    | BEGIN (_, args, locals) -> (
         let rec values args stack = function res -> match args, stack with
         | [], stack' -> res, stack'
         | a :: args', v :: stack' -> values args' stack' (v::res)
@@ -71,12 +71,12 @@ let rec eval env ((cstack, stack, ((st, i, o) as c)) as conf) prg = match prg wi
         let funcState' = updateStateWithList funcState args argVals in
         eval env (cstack, stack', (funcState', i, o)) insxs
     )
-    | END -> (
+    | END | RET _ -> (
         match cstack with
         | (insxs', st') :: cstack' -> eval env (cstack', stack, (State.leave st st', i, o)) insxs'
         | _ -> conf
     )
-    | CALL funcName -> eval env ((insxs, st) :: cstack, stack, c) (env#labeled funcName)
+    | CALL (funcName, _, _) -> eval env ((insxs, st) :: cstack, stack, c) (env#labeled funcName)
     | _ -> failwith @@ "not yet implemented"
 )
 (* Top-level evaluation
@@ -110,7 +110,7 @@ let compile (defs, p) =
        | Expr.Const num -> [CONST num]
        | Expr.Var x -> [LD x]
        | Expr.Binop (op, expr1, expr2) -> (compileExpr expr1) @ (compileExpr expr2) @ [BINOP op]
-       | Expr.Call (funcName, exprxs) -> (List.flatten (List.map compileExpr exprxs)) @ [CALL funcName]
+       | Expr.Call (funcName, exprxs) -> (List.flatten (List.map compileExpr exprxs)) @ [CALL (funcName, List.length exprxs, true)]
     in
     let rec compileStmt stmt n =
         match stmt with
@@ -144,18 +144,18 @@ let compile (defs, p) =
                 [CJMP ("z", loopLabel)], n
         )
         | Stmt.Skip -> [], n
-        | Stmt.Call (funcName, exprxs) -> ((List.flatten (List.map compileExpr exprxs)) @ [CALL funcName], n)
+        | Stmt.Call (funcName, exprxs) -> ((List.flatten (List.map compileExpr exprxs)) @ [CALL (funcName, List.length exprxs, true)], n)
         | Stmt.Return exprOp -> (
             match exprOp with
-            | Some e -> (compileExpr e) @ [END], n
-            | None -> [END], n
+            | Some e -> (compileExpr e) @ [RET true], n
+            | None -> [RET false], n
         )
         | _ -> failwith @@ "not yet implemented"
     in
     let compileDefs defs =
         let mapper (p, n) (funcName, (params, locals, bodyStmt)) =
             let stmtPrg, n = compileStmt bodyStmt n in
-            p @ [LABEL funcName; BEGIN (params, locals)] @ stmtPrg @ [END], n
+            p @ [LABEL funcName; BEGIN (funcName, params, locals)] @ stmtPrg @ [END], n
         in
         let p', n = List.fold_left mapper ([], 1) defs in
         p', n
