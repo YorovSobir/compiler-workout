@@ -198,7 +198,14 @@ let rec compile env = function
 module S = Set.Make (String)
 
 (* Environment implementation *)
-let make_assoc l = List.combine l (List.init (List.length l) (fun x -> x))
+let init_list (l : int) (f : int -> 'a) : 'a list =
+    let rec sequence_map l acc = match l with
+    | 0 -> acc
+    | _ -> sequence_map (l - 1) ((f (l - 1)) :: acc)
+    in
+    sequence_map l []
+
+let make_assoc l = List.combine l (init_list (List.length l) (fun x -> x))
 
 class env =
   object (self)
