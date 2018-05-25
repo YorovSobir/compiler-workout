@@ -70,7 +70,7 @@ module Builtin =
 
     let eval (st, i, o, _) args = function
     | "read"     -> (match i with z::i' -> (st, i', o, Some (Value.of_int z)) | _ -> failwith "Unexpected end of input")
-    | "write"    -> let v = Value.to_int @@ List.hd args in let _ = Printf.printf "val = %d\n" v in
+    | "write"    -> let v = Value.to_int @@ List.hd args in
                     (st, i, o @ [v], None)
     | "$elem"    -> let [b; j] = args in
                     (st, i, o, let i = Value.to_int j in

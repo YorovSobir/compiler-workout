@@ -3,10 +3,10 @@
 # include <stdio.h>
 
 /* Lread is an implementation of the "read" construct */
-extern int Lread () {
+extern int read () {
   int result;
 
-  printf ("> "); 
+  printf ("> ");
   fflush (stdout);
   scanf  ("%d", &result);
 
@@ -14,7 +14,7 @@ extern int Lread () {
 }
 
 /* Lwrite is an implementation of the "write" construct */
-extern int Lwrite (int n) {
+extern int write (int n) {
   printf ("%d\n", n);
   fflush (stdout);
 
