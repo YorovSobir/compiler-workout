@@ -70,7 +70,8 @@ module Builtin =
 
     let eval (st, i, o, _) args = function
     | "read"     -> (match i with z::i' -> (st, i', o, Some (Value.of_int z)) | _ -> failwith "Unexpected end of input")
-    | "write"    -> (st, i, o @ [Value.to_int @@ List.hd args], None)
+    | "write"    -> let v = Value.to_int @@ List.hd args in let _ = Printf.printf "val = %d\n" v in
+                    (st, i, o @ [v], None)
     | "$elem"    -> let [b; j] = args in
                     (st, i, o, let i = Value.to_int j in
                                Some (match b with
@@ -160,9 +161,9 @@ module Expr =
     )
     | Array xs -> let (st, i, o, vs) = eval_list env conf xs in Builtin.eval (st, i, o, None) vs "$array"
     | String s -> (st, i, o, Some (Value.String s))
-    | Elem (exprObj, exprIn) -> (
+    | Elem (exprV, exprIn) -> (
         let (st, i, o, Some index) = eval env conf exprIn in
-        let (st, i, o, Some v) = eval env (st, i, o, None) exprObj in
+        let (st, i, o, Some v) = eval env (st, i, o, None) exprV in
         Builtin.eval (st, i, o, None) [v; index] "$elem"
     )
     | Length expr -> let (st, i, o, Some v) = eval env conf expr in Builtin.eval (st, i, o, None) [v] "$length"
