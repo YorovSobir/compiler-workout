@@ -7,6 +7,13 @@ open GT
 open Ostap
 open Combinators
 
+let init_list (l : int) (f : int -> 'a) : 'a list =
+    let rec sequence_map l acc = match l with
+    | 0 -> acc
+    | _ -> sequence_map (l - 1) ((f (l - 1)) :: acc)
+    in
+sequence_map l []
+
 (* Values *)
 module Value =
   struct
@@ -35,7 +42,7 @@ module Value =
     | _ -> failwith "symbolic expression expected"
 
     let update_string s i x = String.init (String.length s) (fun j -> if j = i then x else s.[j])
-    let update_array  a i x = List.init   (List.length a)   (fun j -> if j = i then x else List.nth a j)
+    let update_array  a i x = init_list (List.length a)   (fun j -> if j = i then x else List.nth a j)
 
   end
 
