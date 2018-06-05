@@ -5,7 +5,7 @@ OCAMLDEP = ocamlfind dep
 SOURCES = Language.ml SM.ml X86.ml Driver.ml
 CAMLP5 = -syntax camlp5o -package ostap.syntax,GT.syntax.all
 PXFLAGS = $(CAMLP5)
-BFLAGS = -rectypes
+BFLAGS = -rectypes -w -p
 OFLAGS = $(BFLAGS)
 
 all: .depend $(TOPFILE).opt
@@ -17,7 +17,7 @@ $(TOPFILE).opt: $(SOURCES:.ml=.cmx)
 	$(OCAMLOPT) -o $(TOPFILE).opt $(OFLAGS) $(LIBS:.cma=.cmxa) -linkpkg -package ostap $(SOURCES:.ml=.cmx)
 
 $(TOPFILE).byte: $(SOURCES:.ml=.cmo)
-	$(OCAMLC) -o $(TOPFILE).byte $(BFLAGS) $(LIBS) -linkpkg -package ostap $(SOURCES:.ml=.cmo) 
+	$(OCAMLC) -o $(TOPFILE).byte $(BFLAGS) $(LIBS) -linkpkg -package ostap $(SOURCES:.ml=.cmo)
 
 clean:
 	rm -Rf *.cmi *.cmo *.cmx *.annot *.o *.opt *.byte *~ .depend
@@ -41,4 +41,3 @@ clean:
 
 %.cmx: %.ml
 	$(OCAMLOPT) -c $(OFLAGS) $(STATIC) $(PXFLAGS) $<
-
